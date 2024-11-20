@@ -2,6 +2,7 @@ import datetime
 import requests
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import os
 
 # Load environment variables from .env file manually
@@ -120,6 +121,20 @@ def get_market_sentiment():
 # Streamlit Web App
 st.title("Nifty 50 Sentiment Analyzer")
 
+# Add Microsoft Clarity tracking code
+components.html(
+    """
+    <script type="text/javascript">
+        (function(c,l,a,r,i,t,y){
+            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "p1n8m63pzi");
+    </script>
+    """,
+    height=0  # Set height to 0 to make the script invisible
+)
+
 # Button to analyze the market sentiment
 if st.button("Analyze Today's Nifty 50"):
     current_time = datetime.datetime.now()
@@ -136,3 +151,4 @@ if st.button("Analyze Today's Nifty 50"):
             st.write(f"Today I am expecting a {market_opening_sentiment} in the market after which a {nifty_prediction} with {spx_sentiment.lower()}.")
         else:
             st.write(sentiment)
+
