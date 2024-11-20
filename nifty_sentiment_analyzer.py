@@ -2,6 +2,7 @@ import datetime
 import requests
 import pandas as pd
 import streamlit as st
+import holidays
 
 # Function to fetch SGX Nifty value at 8:45 am
 def fetch_sgx_nifty_value():
@@ -62,6 +63,14 @@ def predict_nifty_movement(sgx_nifty_change, spx_sentiment):
     else:
         return "Sideways Movement"
 
+# Function to check if today is a trading day
+def is_trading_day():
+    nse_holidays = holidays.IN(state='MH')  # Assuming NSE follows Maharashtra holidays
+    today = datetime.date.today()
+    if today in nse_holidays or today.weekday() >= 5:  # If today is a holiday or weekend
+        return False
+    return True
+
 # Function to get the market sentiment at 8:45 am
 def get_market_sentiment():
     sgx_nifty_change = fetch_sgx_nifty_value()
@@ -87,11 +96,19 @@ def get_market_sentiment():
 # Streamlit Web App
 st.title("Nifty 50 Sentiment Analyzer")
 
-if st.button("Analyze Today's Nifty 50"):
-    sentiment = get_market_sentiment()
-    if isinstance(sentiment, tuple):
-        market_opening_sentiment, nifty_prediction, spx_sentiment = sentiment
-        st.write(f"Today I am expecting a {market_opening_sentiment} in the market after which a {nifty_prediction} with {spx_sentiment.lower()}.")
-    else:
-        st.write(sentiment)
-
+# Check market status based on time
+current_time = datetime.datetime.now()
+if not is_trading_day():
+    st.write("Non-Trading Day: The NSE market is closed today.")
+elif current_time.hour > 15 or (current_time.hour == 15 and current_time.minute > 30):
+    st.write("Market Closed: The market has closed for today.")
+elif current_time.hour >= 9 and current_time.minute >= 15:
+    st.write("Market Is Already Open: Please analyze before market opens.")
+else:
+    if st.button("Analyze Today's Nifty 50"):
+        sentiment = get_market_sentiment()
+        if isinstance(sentiment, tuple):
+            market_opening_sentiment, nifty_prediction, spx_sentiment = sentiment
+            st.write(f"Today I am expecting a {market_opening_sentiment} in the market after which a {nifty_prediction} with {spx_sentiment.lower()}.")
+        else:
+            st.write(sentiment)
