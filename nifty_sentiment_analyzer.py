@@ -2,7 +2,24 @@ import datetime
 import requests
 import pandas as pd
 import streamlit as st
-import holidays as hd
+
+# Function to fetch NSE holidays using EODHD API
+def fetch_nse_holidays():
+    api_key = st.secrets['EODHD_API_KEY']  # Ensure your API key is stored securely
+    url = f"https://eodhd.com/api/exchange-details/NSE?api_token={api_key}"
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            holidays = data.get('Holidays', [])
+            holiday_dates = [datetime.datetime.strptime(holiday['date'], '%Y-%m-%d').date() for holiday in holidays]
+            return holiday_dates
+        else:
+            st.error("Failed to fetch NSE holidays.")
+            return []
+    except Exception as e:
+        st.error(f"Error fetching NSE holidays: {e}")
+        return []
 
 # Function to fetch SGX Nifty value at 8:45 am
 def fetch_sgx_nifty_value():
@@ -65,7 +82,7 @@ def predict_nifty_movement(sgx_nifty_change, spx_sentiment):
 
 # Function to check if today is a trading day
 def is_trading_day():
-    nse_holidays = hd.IN(state='MH')  # Assuming NSE follows Maharashtra holidays
+    nse_holidays = fetch_nse_holidays()
     today = datetime.date.today()
     if today in nse_holidays or today.weekday() >= 5:  # If today is a holiday or weekend
         return False
@@ -112,4 +129,5 @@ else:
             st.write(f"Today I am expecting a {market_opening_sentiment} in the market after which a {nifty_prediction} with {spx_sentiment.lower()}.")
         else:
             st.write(sentiment)
+
 
