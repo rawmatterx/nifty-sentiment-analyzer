@@ -129,13 +129,15 @@ elif current_time.hour > 15 or (current_time.hour == 15 and current_time.minute 
 elif current_time.hour >= 9 and current_time.minute >= 15:
     st.write("Market Is Already Open: Please analyze before market opens.")
 else:
-    if st.button("Analyze Today's Nifty 50"):
+    st.button("Analyze Today's Nifty 50", key="analyze_button")
+    if st.session_state.get('analyze_button'):
         sentiment = get_market_sentiment()
         if isinstance(sentiment, tuple):
             market_opening_sentiment, nifty_prediction, spx_sentiment = sentiment
             st.write(f"Today I am expecting a {market_opening_sentiment} in the market after which a {nifty_prediction} with {spx_sentiment.lower()}.")
         else:
             st.write(sentiment)
+
 
 
 
