@@ -120,24 +120,19 @@ def get_market_sentiment():
 # Streamlit Web App
 st.title("Nifty 50 Sentiment Analyzer")
 
-# Check market status based on time
-current_time = datetime.datetime.now()
-if not is_trading_day():
-    st.write("Non-Trading Day: The NSE market is closed today.")
-elif current_time.hour > 15 or (current_time.hour == 15 and current_time.minute > 30):
-    st.write("Market Closed: The market has closed for today.")
-elif current_time.hour >= 9 and current_time.minute >= 15:
-    st.write("Market Is Already Open: Please analyze before market opens.")
-else:
-    st.button("Analyze Today's Nifty 50", key="analyze_button")
-    if st.session_state.get('analyze_button'):
+# Button to analyze the market sentiment
+if st.button("Analyze Today's Nifty 50"):
+    current_time = datetime.datetime.now()
+    if not is_trading_day():
+        st.write("Non-Trading Day: The NSE market is closed today.")
+    elif current_time.hour > 15 or (current_time.hour == 15 and current_time.minute > 30):
+        st.write("Market Closed: The market has closed for today.")
+    elif current_time.hour >= 9 and current_time.minute >= 15:
+        st.write("Market Is Already Open: Please analyze before market opens.")
+    else:
         sentiment = get_market_sentiment()
         if isinstance(sentiment, tuple):
             market_opening_sentiment, nifty_prediction, spx_sentiment = sentiment
             st.write(f"Today I am expecting a {market_opening_sentiment} in the market after which a {nifty_prediction} with {spx_sentiment.lower()}.")
         else:
             st.write(sentiment)
-
-
-
-
