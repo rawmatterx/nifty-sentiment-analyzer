@@ -55,9 +55,9 @@ def get_spx500_sentiment(spx_data):
 
 # Function to predict Nifty movement based on SGX Nifty and SPX 500
 def predict_nifty_movement(sgx_nifty_change, spx_sentiment):
-    if sgx_nifty_change > 40 and spx_sentiment == "Positive Sentiment":
+    if sgx_nifty_change > 0 and spx_sentiment == "Positive Sentiment":
         return "Bullish Movement"
-    elif sgx_nifty_change < -40 and spx_sentiment == "Negative Sentiment":
+    elif sgx_nifty_change < 0 and spx_sentiment == "Negative Sentiment":
         return "Bearish Movement"
     else:
         return "Sideways Movement"
@@ -68,8 +68,21 @@ def get_market_sentiment():
     spx_data = fetch_spx500_previous_day()
     spx_sentiment = get_spx500_sentiment(spx_data)
     market_opening_sentiment = classify_market_opening(sgx_nifty_change)
-    nifty_prediction = predict_nifty_movement(sgx_nifty_change, spx_sentiment)
-    return market_opening_sentiment, nifty_prediction
+    if sgx_nifty_change > 0:
+        nifty_slope = "Positive"
+    elif sgx_nifty_change < 0:
+        nifty_slope = "Negative"
+    else:
+        nifty_slope = "Flat"
+
+    if nifty_slope == "Positive":
+        nifty_prediction = "Bullish Movement"
+    elif nifty_slope == "Negative":
+        nifty_prediction = "Bearish Movement"
+    else:
+        nifty_prediction = "Sideways/Volatile Movement"
+
+    return market_opening_sentiment, nifty_prediction, spx_sentiment
 
 # Streamlit Web App
 st.title("Nifty 50 Sentiment Analyzer")
@@ -77,8 +90,8 @@ st.title("Nifty 50 Sentiment Analyzer")
 if st.button("Analyze Today's Nifty 50"):
     sentiment = get_market_sentiment()
     if isinstance(sentiment, tuple):
-        market_opening_sentiment, nifty_prediction = sentiment
-        st.write(f"Market Opening Sentiment: {market_opening_sentiment}")
-        st.write(f"Predicted Nifty Movement: {nifty_prediction}")
+        market_opening_sentiment, nifty_prediction, spx_sentiment = sentiment
+        st.write(f"Today I am expecting a {market_opening_sentiment} in the market after which a {nifty_prediction} with {spx_sentiment.lower()}.")
     else:
         st.write(sentiment)
+
