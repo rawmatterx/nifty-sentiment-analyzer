@@ -3,14 +3,14 @@ import requests
 import pandas as pd
 import streamlit as st
 import os
-from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file manually
+EODHD_API_KEY = os.getenv('EODHD_API_KEY')
+FMP_API_KEY = os.getenv('FMP_API_KEY')
 
 # Function to fetch NSE holidays using EODHD API
 def fetch_nse_holidays():
-    api_key = os.getenv('EODHD_API_KEY')  # Ensure your API key is stored securely
+    api_key = EODHD_API_KEY  # Ensure your API key is stored securely
     url = f"https://eodhd.com/api/exchange-details/NSE?api_token={api_key}"
     try:
         response = requests.get(url)
@@ -28,7 +28,7 @@ def fetch_nse_holidays():
 
 # Function to fetch SGX Nifty value at 8:45 am
 def fetch_sgx_nifty_value():
-    api_key = os.getenv('FMP_API_KEY')
+    api_key = FMP_API_KEY
     try:
         response = requests.get(f"https://financialmodelingprep.com/api/v3/quote/%5ENSEI?apikey={api_key}")
         if response.status_code == 200:
@@ -41,7 +41,7 @@ def fetch_sgx_nifty_value():
 
 # Function to fetch SPX 500 data for the previous day
 def fetch_spx500_previous_day():
-    api_key = os.getenv('FMP_API_KEY')
+    api_key = FMP_API_KEY
     try:
         response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/^GSPC?timeseries=2&apikey={api_key}")
         if response.status_code == 200:
