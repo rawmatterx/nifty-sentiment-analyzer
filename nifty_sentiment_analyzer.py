@@ -11,7 +11,7 @@ FMP_API_KEY = os.getenv('FMP_API_KEY')
 # Function to fetch NSE holidays using EODHD API
 def fetch_nse_holidays():
     api_key = EODHD_API_KEY  # Ensure your API key is stored securely
-    url = f"https://eodhd.com/api/exchange-details/NSE?api_token={api_key}"
+    url = f"https://eodhd.com/api/exchange-details/NSE?api_token={api_key}&fmt=json"
     try:
         response = requests.get(url)
         if response.status_code == 200:
@@ -136,5 +136,6 @@ else:
             st.write(f"Today I am expecting a {market_opening_sentiment} in the market after which a {nifty_prediction} with {spx_sentiment.lower()}.")
         else:
             st.write(sentiment)
+
 
 
