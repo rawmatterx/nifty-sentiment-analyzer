@@ -1,126 +1,140 @@
-import datetime
-import requests
 import streamlit as st
-import streamlit.components.v1 as components
+import yfinance as yf
+import investpy
+from datetime import datetime, timedelta
+import pandas as pd
+import matplotlib.pyplot as plt
+import plotly.express as px
 
-# Hardcoded API key for Financial Modeling Prep
-api_key = 'vptSViEFdGn6TJrvmWAkFx2MMaJBxvOJ'
+# Function to fetch Nifty 50 previous day close price
+def get_nifty50_previous_close():
+    ticker = '^NSEI'  # Nifty 50 index symbol
+    data = yf.download(ticker, period='2d')
+    if data.empty:
+        st.error('Failed to fetch Nifty 50 data.')
+        return None
+    previous_close = data['Close'].iloc[-2]
+    return previous_close
 
-# Function to fetch Nifty 50 end-of-day value
-def fetch_nifty50_value(date):
+# Function to fetch DJIA previous day percentage move
+def get_djia_previous_day_percentage_move():
+    ticker = '^DJI'  # DJIA index symbol
+    data = yf.download(ticker, period='2d')
+    if data.empty:
+        st.error('Failed to fetch DJIA data.')
+        return None
+    previous_close = data['Close'].iloc[-2]
+    last_close = data['Close'].iloc[-1]
+    percentage_move = ((last_close - previous_close) / previous_close) * 100
+    return percentage_move
+
+# Function to fetch real-time SGX Nifty price
+def get_sgx_nifty_price():
     try:
-        url = f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?from={date}&to={date}&apikey={api_key}"
-        response = requests.get(url)
-        data = response.json() if response.status_code == 200 else {}
-        if "historical" in data and len(data["historical"]) > 0:
-            nifty50_close = data["historical"][0]["close"]
-        else:
-            nifty50_close = 0  # No data available for the given date
-        st.write(f"Nifty 50 Data on {date}: {data}")  # Debug statement
+        df = investpy.get_index_recent_data(index='SGX Nifty', country='india')
+        current_price = df['Close'][-1]
+        return current_price
     except Exception as e:
-        nifty50_close = 0  # Handle exception and set a default value
-        st.write(f"Error fetching Nifty 50 value: {e}")  # Log the exception
-    return nifty50_close
+        st.error(f'Failed to fetch SGX Nifty data: {e}')
+        return None
 
-# Function to fetch Dow Jones Industrial Average (DJI) previous day end-of-day close price and calculate percentage movement
-def fetch_dji_previous_day(date):
-    try:
-        url = f"https://financialmodelingprep.com/api/v3/historical-price-full/%5EDJIA?from={date}&to={date}&apikey={api_key}"
-        response = requests.get(url)
-        data = response.json() if response.status_code == 200 else {}
-        if "historical" in data and len(data["historical"]) > 0:
-            dji_data = data["historical"][0]
-            previous_day_change_percentage = ((dji_data['close'] - dji_data['open']) / dji_data['open']) * 100
-        else:
-            previous_day_change_percentage = 0  # No data available for the given date
-        st.write(f"DJI Data on {date}: {data}")  # Debug statement
-    except Exception as e:
-        previous_day_change_percentage = 0  # Handle exception and set a default value
-        st.write(f"Error fetching DJI data: {e}")  # Log the exception
-    return previous_day_change_percentage
+# Function to fetch historical data for Nifty 50
+def get_nifty50_historical_data():
+    ticker = '^NSEI'  # Nifty 50 index symbol
+    data = yf.download(ticker, period='1mo')
+    if data.empty:
+        st.error('Failed to fetch Nifty 50 historical data.')
+        return None
+    return data
 
-# Function to classify the market opening sentiment based on Nifty 50 previous close and SGX Nifty value
-def classify_market_opening(nifty50_close, sgx_nifty_value):
-    difference = sgx_nifty_value - nifty50_close
+def main():
+    st.title('Nifty Market Prediction App')
+
+    # Step 1: Fetch SGX Nifty price at 8:45 AM today
+    sgx_nifty_price = get_sgx_nifty_price()
+    if sgx_nifty_price is None:
+        st.stop()
+
+    st.write(f"**SGX Nifty price at latest available time:** {sgx_nifty_price:.2f}")
+
+    # Fetch Nifty 50 previous day's closing price
+    previous_close_nifty = get_nifty50_previous_close()
+    if previous_close_nifty is None:
+        st.stop()
+
+    st.write(f"**Nifty 50 previous close price:** {previous_close_nifty:.2f}")
+
+    # Calculate the difference
+    difference = sgx_nifty_price - previous_close_nifty
+
+    # Determine how Nifty will open
     if -40 <= difference <= 40:
-        return "Flat Opening"
+        opening = 'Flat'
     elif difference > 100:
-        return "Huge Gap Up Opening"
+        opening = 'Huge Gap Up'
     elif difference > 40:
-        return "Gap Up Opening"
+        opening = 'Gap Up'
     elif difference < -100:
-        return "Huge Gap Down Opening"
+        opening = 'Huge Gap Down'
     elif difference < -40:
-        return "Gap Down Opening"
+        opening = 'Gap Down'
     else:
-        return "Flat Neutral Opening"
+        opening = 'Flat'
 
-# Function to get DJI sentiment
-def get_dji_sentiment(change_percentage):
-    if change_percentage > 0:
-        return "Positive Sentiment"
-    elif change_percentage < 0:
-        return "Negative Sentiment"
-    else:
-        return "Neutral Sentiment"
+    st.write(f"**Difference between SGX Nifty and Nifty 50 previous close:** {difference:.2f}")
+    st.write(f"**Nifty is expected to open:** {opening}")
 
-# Function to calculate the close point based on DJI movement percentage and Nifty 50 previous day close
-def calculate_close_point(nifty50_close, change_percentage):
-    return nifty50_close * (1 + (change_percentage / 100))
+    # Step 2: Fetch DJIA previous day percentage move
+    djia_percentage_move = get_djia_previous_day_percentage_move()
+    if djia_percentage_move is None:
+        st.stop()
 
-# Function to determine market movement based on open and close points
-def determine_market_movement(open_point, close_point):
-    difference = close_point - open_point
-    if difference > 2 * open_point:
-        return "Bullish Movement"
-    elif difference < -2 * open_point:
-        return "Bearish Movement"
-    else:
-        return "Sideways/Volatile Movement"
+    # Determine market sentiment
+    sentiment = 'Positive' if djia_percentage_move > 0 else 'Negative'
+    st.write(f"**DJIA moved:** {djia_percentage_move:.2f}% yesterday.")
+    st.write(f"**Market sentiment is expected to be:** {sentiment}")
 
-# Function to get the market sentiment for a specific date
-def get_market_sentiment(date):
-    nifty50_close = fetch_nifty50_value(date)
-    sgx_nifty_value = fetch_nifty50_value(date)  # Assuming SGX Nifty data is similar to Nifty 50 for this example
-    market_opening_sentiment = classify_market_opening(nifty50_close, sgx_nifty_value)
-    dji_change_percentage = fetch_dji_previous_day(date)
-    dji_sentiment = get_dji_sentiment(dji_change_percentage)
-    close_point = calculate_close_point(nifty50_close, dji_change_percentage)
-    st.write(f"Calculated Close Point on {date}: {close_point}")  # Debug statement
-    market_movement = determine_market_movement(sgx_nifty_value, close_point)
-    return market_opening_sentiment, market_movement, dji_sentiment
+    # Step 3: Convert DJIA percentage move into Nifty 50 price movement
+    close_point = (djia_percentage_move / 100) * previous_close_nifty
+    st.write(f"**Expected Nifty 50 movement based on DJIA:** {close_point:.2f} points")
 
-# Streamlit Web App
-st.title("Nifty 50 Sentiment Analyzer")
-
-# Add Microsoft Clarity tracking code
-components.html(
-    """
-    <script type="text/javascript">
-        (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        })(window, document, "clarity", "script", "p1n8m63pzi");
-    </script>
-    """,
-    height=0  # Set height to 0 to make the script invisible
-)
-
-# Date selection for analysis
-st.write("Select a date to analyze Nifty 50 sentiment (last 10 trading days):")
-start_date = datetime.date.today() - datetime.timedelta(days=10)
-selected_date = st.date_input("Select Date", max_value=datetime.date.today(), min_value=start_date)
-
-# Button to analyze the market sentiment for the selected date
-if st.button("Analyze Nifty 50 for Selected Date"):
-    if selected_date.weekday() >= 5:
-        st.write("Non-Trading Day: The market is closed on weekends.")
-    else:
-        sentiment = get_market_sentiment(selected_date.strftime("%Y-%m-%d"))
-        if isinstance(sentiment, tuple):
-            market_opening_sentiment, market_movement, dji_sentiment = sentiment
-            st.write(f"For {selected_date}, I am expecting a {market_opening_sentiment} in the market after which a {market_movement} with {dji_sentiment.lower()}.")
+    # Step 4: Determine market trend
+    open_point = difference
+    if abs(close_point) > 2 * abs(open_point):
+        if close_point > 0:
+            market_trend = 'Bullish Move'
         else:
-            st.write(sentiment)
+            market_trend = 'Bearish Move'
+    else:
+        market_trend = 'Volatile/Sideways'
+
+    st.write(f"**Based on calculations, the market is expected to have a:** {market_trend}")
+
+    # Historical Analysis
+    st.header('Historical Analysis')
+
+    nifty_data = get_nifty50_historical_data()
+    if nifty_data is not None:
+        st.subheader('Nifty 50 Closing Prices - Last Month')
+        fig = px.line(nifty_data, x=nifty_data.index, y='Close', title='Nifty 50 Closing Prices')
+        st.plotly_chart(fig)
+
+        # Moving Averages
+        nifty_data['MA20'] = nifty_data['Close'].rolling(window=20).mean()
+        nifty_data['MA50'] = nifty_data['Close'].rolling(window=50).mean()
+
+        st.subheader('Nifty 50 with Moving Averages')
+        fig_ma = px.line(nifty_data, x=nifty_data.index, y=['Close', 'MA20', 'MA50'], title='Nifty 50 with Moving Averages')
+        st.plotly_chart(fig_ma)
+
+        # Show data table
+        st.subheader('Nifty 50 Historical Data')
+        st.dataframe(nifty_data.tail(10))
+
+    else:
+        st.write('Historical data not available.')
+
+if __name__ == "__main__":
+    main()
+
 
