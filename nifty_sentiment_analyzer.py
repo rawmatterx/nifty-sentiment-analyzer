@@ -1,149 +1,136 @@
-import datetime
-import requests
-import pandas as pd
-import streamlit as st
-import streamlit.components.v1 as components
-import os
+# 1. API Key Management
+# Instead of direct environment variable access, implement a config class:
+class Config:
+    def __init__(self):
+        self.EODHD_API_KEY = os.getenv('EODHD_API_KEY')
+        self.FMP_API_KEY = os.getenv('FMP_API_KEY')
+        
+        if not self.FMP_API_KEY:
+            raise ValueError("FMP_API_KEY environment variable is not set")
 
-# Load environment variables from .env file manually
-EODHD_API_KEY = os.getenv('EODHD_API_KEY')
-FMP_API_KEY = os.getenv('FMP_API_KEY')
+# 2. API Integration
+# Create a dedicated API client class:
+class MarketDataClient:
+    def __init__(self, api_key):
+        self.api_key = api_key
+        self.base_url = "https://financialmodelingprep.com/api/v3"
+        
+    def get_historical_price(self, symbol, date):
+        url = f"{self.base_url}/historical-price-full/{symbol}"
+        params = {
+            "from": date,
+            "to": date,
+            "apikey": self.api_key
+        }
+        response = requests.get(url, params=params)
+        response.raise_for_status()  # Raise exception for non-200 status codes
+        return response.json()
 
-# Function to fetch SGX Nifty value
-def fetch_sgx_nifty_value(date):
-    api_key = FMP_API_KEY
-    try:
-        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?from={date}&to={date}&apikey={api_key}")
-        data = response.json() if response.status_code == 200 else {}
-        if "historical" in data and len(data["historical"]) > 0:
-            sgx_nifty_value = data["historical"][0]["close"]
-        else:
-            sgx_nifty_value = 0  # No data available for the given date
-        st.write(f"SGX Nifty API Response: {data}")  # Debug statement to log the entire response
-    except Exception as e:
-        sgx_nifty_value = 0  # Handle exception and set a default value
-        st.write(f"Error fetching SGX Nifty value: {e}")  # Log the exception
-    st.write(f"SGX Nifty Value on {date}: {sgx_nifty_value}")  # Debug statement
-    return sgx_nifty_value
+# 3. Data Caching
+# Implement caching to prevent redundant API calls:
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def fetch_market_data(symbol, date):
+    client = MarketDataClient(Config().FMP_API_KEY)
+    return client.get_historical_price(symbol, date)
 
-# Function to fetch Nifty 50 previous day close price
-def fetch_nifty50_previous_close(date):
-    api_key = FMP_API_KEY
-    try:
-        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?from={date}&to={date}&apikey={api_key}")
-        data = response.json() if response.status_code == 200 else {}
-        if "historical" in data and len(data["historical"]) > 0:
-            nifty50_close = data["historical"][0]["close"]
-        else:
-            nifty50_close = 0  # No data available for the given date
-        st.write(f"Nifty 50 API Response: {data}")  # Debug statement to log the entire response
-    except Exception as e:
-        nifty50_close = 0  # Handle exception and set a default value
-        st.write(f"Error fetching Nifty 50 previous close: {e}")  # Log the exception
-    st.write(f"Nifty 50 Previous Close on {date}: {nifty50_close}")  # Debug statement
-    return nifty50_close
+# 4. Input Validation
+def validate_date(date):
+    if isinstance(date, str):
+        try:
+            datetime.datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError("Invalid date format. Use YYYY-MM-DD")
+    
+    if date.weekday() >= 5:
+        raise ValueError("Selected date is a weekend")
 
-# Function to classify the market opening sentiment based on SGX Nifty and Nifty 50 previous close
+# 5. Constants and Configuration
+MARKET_THRESHOLDS = {
+    "HUGE_GAP": 100,
+    "GAP": 40,
+    "FLAT_RANGE": (-40, 40)
+}
+
+# 6. Enhanced Market Classification
 def classify_market_opening(sgx_nifty_value, nifty50_close):
     difference = sgx_nifty_value - nifty50_close
-    if -40 <= difference <= 40:
+    
+    if MARKET_THRESHOLDS["FLAT_RANGE"][0] <= difference <= MARKET_THRESHOLDS["FLAT_RANGE"][1]:
         return "Flat Opening"
-    elif difference > 100:
+    elif difference > MARKET_THRESHOLDS["HUGE_GAP"]:
         return "Huge Gap Up Opening"
-    elif difference > 40:
+    elif difference > MARKET_THRESHOLDS["GAP"]:
         return "Gap Up Opening"
-    elif difference < -100:
+    elif difference < -MARKET_THRESHOLDS["HUGE_GAP"]:
         return "Huge Gap Down Opening"
-    elif difference < -40:
+    elif difference < -MARKET_THRESHOLDS["GAP"]:
         return "Gap Down Opening"
     else:
         return "Flat Neutral Opening"
 
-# Function to fetch Dow Jones Industrial Average (DJI) previous day close price and calculate percentage movement
-def fetch_dji_previous_day(date):
-    api_key = FMP_API_KEY
+# 7. Improved Error Handling
+class MarketDataError(Exception):
+    """Custom exception for market data related errors"""
+    pass
+
+def safe_api_call(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except requests.exceptions.RequestException as e:
+            raise MarketDataError(f"API request failed: {str(e)}")
+        except ValueError as e:
+            raise MarketDataError(f"Invalid data: {str(e)}")
+        except Exception as e:
+            raise MarketDataError(f"Unexpected error: {str(e)}")
+    return wrapper
+
+# 8. Session State Management
+def initialize_session_state():
+    if 'analysis_results' not in st.session_state:
+        st.session_state.analysis_results = []
+
+# 9. Results Storage
+def store_analysis_result(date, sentiment_data):
+    if 'analysis_results' in st.session_state:
+        st.session_state.analysis_results.append({
+            'date': date,
+            'sentiment': sentiment_data
+        })
+
+# 10. UI Improvements
+def display_analysis_results():
+    if st.session_state.analysis_results:
+        for result in st.session_state.analysis_results:
+            with st.expander(f"Analysis for {result['date']}"):
+                st.json(result['sentiment'])
+                
+# Usage in main app:
+def main():
+    initialize_session_state()
+    st.title("Nifty 50 Sentiment Analyzer")
+    
     try:
-        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5EDJI?from={date}&to={date}&apikey={api_key}")
-        data = response.json() if response.status_code == 200 else {}
-        if "historical" in data and len(data["historical"]) > 0:
-            dji_data = data["historical"][0]
-            previous_day_change_percentage = ((dji_data["close"] - dji_data["open"]) / dji_data["open"]) * 100
-        else:
-            previous_day_change_percentage = 0  # No data available for the given date
-        st.write(f"DJI API Response: {data}")  # Debug statement to log the entire response
+        config = Config()
+        client = MarketDataClient(config.FMP_API_KEY)
+        
+        selected_date = st.date_input(
+            "Select Date",
+            max_value=datetime.date.today(),
+            min_value=datetime.date.today() - datetime.timedelta(days=10)
+        )
+        
+        if st.button("Analyze Nifty 50"):
+            validate_date(selected_date)
+            sentiment = get_market_sentiment(selected_date.strftime("%Y-%m-%d"))
+            store_analysis_result(selected_date, sentiment)
+            display_analysis_results()
+            
+    except MarketDataError as e:
+        st.error(f"Analysis failed: {str(e)}")
     except Exception as e:
-        previous_day_change_percentage = 0  # Handle exception and set a default value
-        st.write(f"Error fetching DJI data: {e}")  # Log the exception
-    st.write(f"DJI Change Percentage on {date}: {previous_day_change_percentage}%")  # Debug statement
-    return previous_day_change_percentage
+        st.error(f"Unexpected error: {str(e)}")
 
-# Function to get DJI sentiment
-def get_dji_sentiment(change_percentage):
-    if change_percentage > 0:
-        return "Positive Sentiment"
-    elif change_percentage < 0:
-        return "Negative Sentiment"
-    else:
-        return "Neutral Sentiment"
-
-# Function to calculate the close point based on DJI movement percentage and Nifty 50 previous day close
-def calculate_close_point(nifty50_close, change_percentage):
-    return nifty50_close * (1 + (change_percentage / 100))
-
-# Function to determine market movement based on open and close points
-def determine_market_movement(open_point, close_point):
-    difference = close_point - open_point
-    if difference > 2 * open_point:
-        return "Bullish Movement"
-    elif difference < -2 * open_point:
-        return "Bearish Movement"
-    else:
-        return "Sideways/Volatile Movement"
-
-# Function to get the market sentiment for a specific date
-def get_market_sentiment(date):
-    sgx_nifty_value = fetch_sgx_nifty_value(date)
-    nifty50_close = fetch_nifty50_previous_close(date)
-    market_opening_sentiment = classify_market_opening(sgx_nifty_value, nifty50_close)
-    dji_change_percentage = fetch_dji_previous_day(date)
-    dji_sentiment = get_dji_sentiment(dji_change_percentage)
-    close_point = calculate_close_point(nifty50_close, dji_change_percentage)
-    st.write(f"Calculated Close Point on {date}: {close_point}")  # Debug statement
-    market_movement = determine_market_movement(sgx_nifty_value, close_point)
-    return market_opening_sentiment, market_movement, dji_sentiment
-
-# Streamlit Web App
-st.title("Nifty 50 Sentiment Analyzer")
-
-# Add Microsoft Clarity tracking code
-components.html(
-    """
-    <script type="text/javascript">
-        (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        })(window, document, "clarity", "script", "p1n8m63pzi");
-    </script>
-    """,
-    height=0  # Set height to 0 to make the script invisible
-)
-
-# Date selection for analysis
-st.write("Select a date to analyze Nifty 50 sentiment (last 10 trading days):")
-start_date = datetime.date.today() - datetime.timedelta(days=10)
-selected_date = st.date_input("Select Date", max_value=datetime.date.today(), min_value=start_date)
-
-# Button to analyze the market sentiment for the selected date
-if st.button("Analyze Nifty 50 for Selected Date"):
-    if selected_date.weekday() >= 5:
-        st.write("Non-Trading Day: The market is closed on weekends.")
-    else:
-        sentiment = get_market_sentiment(selected_date.strftime("%Y-%m-%d"))
-        if isinstance(sentiment, tuple):
-            market_opening_sentiment, market_movement, dji_sentiment = sentiment
-            st.write(f"For {selected_date}, I am expecting a {market_opening_sentiment} in the market after which a {market_movement} with {dji_sentiment.lower()}.")
-        else:
-            st.write(sentiment)
-
-
+if __name__ == "__main__":
+    main()
