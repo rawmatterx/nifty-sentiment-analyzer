@@ -6,7 +6,7 @@ import streamlit.components.v1 as components
 import os
 
 # Load environment variables from .env file manually
-FMP_API_KEY = os.getenv('FMP_API_KEY')
+FMP_API_KEY = 'vptSViEFdGn6TJrvmWAkFx2MMaJBxvOJ'
 
 # Function to fetch SGX Nifty end-of-day value
 def fetch_sgx_nifty_value(date):
@@ -156,3 +156,4 @@ if st.button("Analyze Nifty 50 for Selected Date"):
             st.write(f"For {selected_date}, I am expecting a {market_opening_sentiment} in the market after which a {market_movement} with {dji_sentiment.lower()}.")
         else:
             st.write(sentiment)
+
