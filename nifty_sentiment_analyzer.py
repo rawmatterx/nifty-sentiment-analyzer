@@ -14,14 +14,11 @@ def fetch_sgx_nifty_value(date):
     api_key = FMP_API_KEY
     try:
         response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?from={date}&to={date}&apikey={api_key}")
-        if response.status_code == 200:
-            data = response.json()
-            if "historical" in data and len(data["historical"]) > 0:
-                sgx_nifty_value = data["historical"][0]["close"]
-            else:
-                sgx_nifty_value = 0  # No data available for the given date
+        data = response.json() if response.status_code == 200 else {}
+        if "historical" in data and len(data["historical"]) > 0:
+            sgx_nifty_value = data["historical"][0]["close"]
         else:
-            sgx_nifty_value = 0  # Default value in case of an error
+            sgx_nifty_value = 0  # No data available for the given date
         st.write(f"SGX Nifty API Response: {data}")  # Debug statement to log the entire response
     except Exception as e:
         sgx_nifty_value = 0  # Handle exception and set a default value
@@ -34,14 +31,11 @@ def fetch_nifty50_previous_close(date):
     api_key = FMP_API_KEY
     try:
         response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?from={date}&to={date}&apikey={api_key}")
-        if response.status_code == 200:
-            data = response.json()
-            if "historical" in data and len(data["historical"]) > 0:
-                nifty50_close = data["historical"][0]["close"]
-            else:
-                nifty50_close = 0  # No data available for the given date
+        data = response.json() if response.status_code == 200 else {}
+        if "historical" in data and len(data["historical"]) > 0:
+            nifty50_close = data["historical"][0]["close"]
         else:
-            nifty50_close = 0  # Default value in case of an error
+            nifty50_close = 0  # No data available for the given date
         st.write(f"Nifty 50 API Response: {data}")  # Debug statement to log the entire response
     except Exception as e:
         nifty50_close = 0  # Handle exception and set a default value
@@ -70,15 +64,12 @@ def fetch_dji_previous_day(date):
     api_key = FMP_API_KEY
     try:
         response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5EDJI?from={date}&to={date}&apikey={api_key}")
-        if response.status_code == 200:
-            data = response.json()
-            if "historical" in data and len(data["historical"]) > 0:
-                dji_data = data["historical"][0]
-                previous_day_change_percentage = ((dji_data["close"] - dji_data["open"]) / dji_data["open"]) * 100
-            else:
-                previous_day_change_percentage = 0  # No data available for the given date
+        data = response.json() if response.status_code == 200 else {}
+        if "historical" in data and len(data["historical"]) > 0:
+            dji_data = data["historical"][0]
+            previous_day_change_percentage = ((dji_data["close"] - dji_data["open"]) / dji_data["open"]) * 100
         else:
-            previous_day_change_percentage = 0  # Default value in case of an error
+            previous_day_change_percentage = 0  # No data available for the given date
         st.write(f"DJI API Response: {data}")  # Debug statement to log the entire response
     except Exception as e:
         previous_day_change_percentage = 0  # Handle exception and set a default value
