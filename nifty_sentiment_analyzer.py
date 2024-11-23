@@ -1,47 +1,53 @@
 import datetime
-from fmp_python.fmp import FMP
+import requests
+import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+import os
 
-# Initialize the FMP client with your API key
-api_key = 'vptSViEFdGn6TJrvmWAkFx2MMaJBxvOJ'
-fmp = FMP(api_key=api_key, output_format='pandas')
+# Configuration
+EODHD_API_KEY = os.getenv('EODHD_API_KEY')
+FMP_API_KEY = os.getenv('FMP_API_KEY')
 
-# Function to fetch Nifty 50 end-of-day value
-def fetch_nifty50_value(date):
+def fetch_sgx_nifty_value(date):
+    """Fetch SGX Nifty value at 8:45 AM for given date"""
+    api_key = FMP_API_KEY
     try:
-        historical_data = fmp.get_historical_price('^NSEI', _from=date, _to=date)
-        if not historical_data.empty:
-            nifty50_close = historical_data.iloc[0]['close']
+        # Note: Modify the API endpoint to get 8:45 AM data specifically
+        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?from={date}&to={date}&apikey={api_key}")
+        data = response.json() if response.status_code == 200 else {}
+        if "historical" in data and len(data["historical"]) > 0:
+            sgx_nifty_value = data["historical"][0]["close"]  # Should be 8:45 AM value
         else:
-            nifty50_close = 0  # No data available for the given date
-        st.write(f"Nifty 50 Data on {date}: {historical_data}")  # Debug statement
+            sgx_nifty_value = 0
+        st.write(f"SGX Nifty Value at 8:45 AM on {date}: {sgx_nifty_value}")
     except Exception as e:
-        nifty50_close = 0  # Handle exception and set a default value
-        st.write(f"Error fetching Nifty 50 value: {e}")  # Log the exception
+        sgx_nifty_value = 0
+        st.write(f"Error fetching SGX Nifty value: {e}")
+    return sgx_nifty_value
+
+def fetch_nifty50_previous_close(date):
+    """Fetch Nifty 50 previous day close price"""
+    api_key = FMP_API_KEY
+    try:
+        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?from={date}&to={date}&apikey={api_key}")
+        data = response.json() if response.status_code == 200 else {}
+        if "historical" in data and len(data["historical"]) > 0:
+            nifty50_close = data["historical"][0]["close"]
+        else:
+            nifty50_close = 0
+        st.write(f"Nifty 50 Previous Close: {nifty50_close}")
+    except Exception as e:
+        nifty50_close = 0
+        st.write(f"Error fetching Nifty 50 previous close: {e}")
     return nifty50_close
 
-# Function to fetch Dow Jones Industrial Average (DJI) previous day end-of-day close price and calculate percentage movement
-def fetch_dji_previous_day(date):
-    try:
-        historical_data = fmp.get_historical_price('^DJI', _from=date, _to=date)
-        if not historical_data.empty:
-            dji_data = historical_data.iloc[0]
-            previous_day_change_percentage = ((dji_data['close'] - dji_data['open']) / dji_data['open']) * 100
-        else:
-            previous_day_change_percentage = 0  # No data available for the given date
-        st.write(f"DJI Data on {date}: {historical_data}")  # Debug statement
-    except Exception as e:
-        previous_day_change_percentage = 0  # Handle exception and set a default value
-        st.write(f"Error fetching DJI data: {e}")  # Log the exception
-    return previous_day_change_percentage
-
-# Function to classify the market opening sentiment based on Nifty 50 previous close and SGX Nifty value
-def classify_market_opening(nifty50_close, sgx_nifty_value):
+def classify_market_opening(sgx_nifty_value, nifty50_close):
+    """Classify market opening based on difference between SGX Nifty and Nifty 50 previous close"""
     difference = sgx_nifty_value - nifty50_close
-    if -40 <= difference <= 40:
-        return "Flat Opening"
-    elif difference > 100:
+    
+    # Updated classification logic as per requirements
+    if difference > 100:
         return "Huge Gap Up Opening"
     elif difference > 40:
         return "Gap Up Opening"
@@ -49,75 +55,107 @@ def classify_market_opening(nifty50_close, sgx_nifty_value):
         return "Huge Gap Down Opening"
     elif difference < -40:
         return "Gap Down Opening"
-    else:
-        return "Flat Neutral Opening"
+    elif -40 <= difference <= 40:
+        return "Flat Opening"
+    return "Flat Opening"  # Default case
 
-# Function to get DJI sentiment
-def get_dji_sentiment(change_percentage):
-    if change_percentage > 0:
-        return "Positive Sentiment"
-    elif change_percentage < 0:
-        return "Negative Sentiment"
-    else:
-        return "Neutral Sentiment"
+def fetch_dji_previous_day(date):
+    """Fetch DJI previous day data and calculate percentage movement"""
+    api_key = FMP_API_KEY
+    try:
+        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5EDJI?from={date}&to={date}&apikey={api_key}")
+        data = response.json() if response.status_code == 200 else {}
+        if "historical" in data and len(data["historical"]) > 0:
+            dji_data = data["historical"][0]
+            previous_day_change_percentage = ((dji_data["close"] - dji_data["open"]) / dji_data["open"]) * 100
+        else:
+            previous_day_change_percentage = 0
+        st.write(f"DJI Previous Day Movement: {previous_day_change_percentage:.2f}%")
+    except Exception as e:
+        previous_day_change_percentage = 0
+        st.write(f"Error fetching DJI data: {e}")
+    return previous_day_change_percentage
 
-# Function to calculate the close point based on DJI movement percentage and Nifty 50 previous day close
-def calculate_close_point(nifty50_close, change_percentage):
-    return nifty50_close * (1 + (change_percentage / 100))
+def calculate_close_point(open_point, nifty50_close, dji_percentage):
+    """Calculate expected close point based on DJI percentage movement"""
+    # Convert DJI percentage to Nifty points
+    point_movement = (nifty50_close * dji_percentage) / 100
+    return open_point + point_movement
 
-# Function to determine market movement based on open and close points
 def determine_market_movement(open_point, close_point):
+    """Determine market movement based on open and close points"""
+    # Calculate the difference relative to open point
     difference = close_point - open_point
-    if difference > 2 * open_point:
+    threshold = 2 * abs(open_point)
+    
+    if difference > threshold:
         return "Bullish Movement"
-    elif difference < -2 * open_point:
+    elif difference < -threshold:
         return "Bearish Movement"
     else:
         return "Sideways/Volatile Movement"
 
-# Function to get the market sentiment for a specific date
 def get_market_sentiment(date):
-    nifty50_close = fetch_nifty50_value(date)
-    sgx_nifty_value = fetch_nifty50_value(date)  # Assuming SGX Nifty data is similar to Nifty 50 for this example
-    market_opening_sentiment = classify_market_opening(nifty50_close, sgx_nifty_value)
-    dji_change_percentage = fetch_dji_previous_day(date)
-    dji_sentiment = get_dji_sentiment(dji_change_percentage)
-    close_point = calculate_close_point(nifty50_close, dji_change_percentage)
-    st.write(f"Calculated Close Point on {date}: {close_point}")  # Debug statement
+    """Get complete market sentiment analysis"""
+    # Step 1: Get SGX Nifty and previous day Nifty 50 close
+    sgx_nifty_value = fetch_sgx_nifty_value(date)
+    nifty50_close = fetch_nifty50_previous_close(date)
+    
+    # Classify opening
+    opening_type = classify_market_opening(sgx_nifty_value, nifty50_close)
+    
+    # Step 2: Get DJI sentiment
+    dji_percentage = fetch_dji_previous_day(date)
+    dji_sentiment = "Positive Sentiment" if dji_percentage > 0 else "Negative Sentiment"
+    
+    # Step 3: Calculate expected close point
+    close_point = calculate_close_point(sgx_nifty_value, nifty50_close, dji_percentage)
+    
+    # Step 4: Determine market movement
     market_movement = determine_market_movement(sgx_nifty_value, close_point)
-    return market_opening_sentiment, market_movement, dji_sentiment
+    
+    return {
+        "opening_type": opening_type,
+        "dji_sentiment": dji_sentiment,
+        "expected_open": sgx_nifty_value,
+        "expected_close": close_point,
+        "market_movement": market_movement
+    }
 
 # Streamlit Web App
-st.title("Nifty 50 Sentiment Analyzer")
-
-# Add Microsoft Clarity tracking code
-components.html(
-    """
-    <script type="text/javascript">
-        (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        })(window, document, "clarity", "script", "p1n8m63pzi");
-    </script>
-    """,
-    height=0  # Set height to 0 to make the script invisible
-)
-
-# Date selection for analysis
-st.write("Select a date to analyze Nifty 50 sentiment (last 10 trading days):")
-start_date = datetime.date.today() - datetime.timedelta(days=10)
-selected_date = st.date_input("Select Date", max_value=datetime.date.today(), min_value=start_date)
-
-# Button to analyze the market sentiment for the selected date
-if st.button("Analyze Nifty 50 for Selected Date"):
-    if selected_date.weekday() >= 5:
-        st.write("Non-Trading Day: The market is closed on weekends.")
-    else:
-        sentiment = get_market_sentiment(selected_date.strftime("%Y-%m-%d"))
-        if isinstance(sentiment, tuple):
-            market_opening_sentiment, market_movement, dji_sentiment = sentiment
-            st.write(f"For {selected_date}, I am expecting a {market_opening_sentiment} in the market after which a {market_movement} with {dji_sentiment.lower()}.")
+def main():
+    st.title("Nifty 50 Market Sentiment Analyzer")
+    
+    # Date selection
+    st.write("Select a date to analyze Nifty 50 sentiment (last 10 trading days):")
+    start_date = datetime.date.today() - datetime.timedelta(days=10)
+    selected_date = st.date_input("Select Date", 
+                                 max_value=datetime.date.today(), 
+                                 min_value=start_date)
+    
+    # Analysis button
+    if st.button("Analyze Market"):
+        if selected_date.weekday() >= 5:
+            st.error("Selected date is a weekend. Please choose a weekday.")
         else:
-            st.write(sentiment)
+            st.write("### Analysis Results")
+            results = get_market_sentiment(selected_date.strftime("%Y-%m-%d"))
+            
+            # Display results in a structured format
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("Opening Analysis:")
+                st.write(f"• Type: {results['opening_type']}")
+                st.write(f"• Expected Open: {results['expected_open']:.2f}")
+                
+            with col2:
+                st.write("Movement Analysis:")
+                st.write(f"• DJI Sentiment: {results['dji_sentiment']}")
+                st.write(f"• Expected Close: {results['expected_close']:.2f}")
+            
+            st.write("### Final Prediction")
+            st.write(f"Market is expected to show a {results['market_movement'].lower()} "
+                    f"with {results['dji_sentiment'].lower()}.")
 
+if __name__ == "__main__":
+    main()
