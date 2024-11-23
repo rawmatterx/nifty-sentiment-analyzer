@@ -8,16 +8,20 @@ import os
 # Load environment variables from .env file manually
 FMP_API_KEY = os.getenv('FMP_API_KEY')
 
-# Function to fetch SGX Nifty value
+# Function to fetch SGX Nifty end-of-day value
 def fetch_sgx_nifty_value(date):
     api_key = FMP_API_KEY
     try:
-        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?from={date}&to={date}&apikey={api_key}")
+        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?apikey={api_key}&serietype=line")
         data = response.json() if response.status_code == 200 else {}
-        if "historical" in data and len(data["historical"]) > 0:
-            sgx_nifty_value = data["historical"][0]["close"]
+        if "historical" in data:
+            historical_data = [entry for entry in data["historical"] if entry["date"] == date]
+            if historical_data:
+                sgx_nifty_value = historical_data[0]["close"]
+            else:
+                sgx_nifty_value = 0  # No data available for the given date
         else:
-            sgx_nifty_value = 0  # No data available for the given date
+            sgx_nifty_value = 0
         st.write(f"SGX Nifty API Response: {data}")  # Debug statement to log the entire response
     except Exception as e:
         sgx_nifty_value = 0  # Handle exception and set a default value
@@ -25,16 +29,20 @@ def fetch_sgx_nifty_value(date):
     st.write(f"SGX Nifty Value on {date}: {sgx_nifty_value}")  # Debug statement
     return sgx_nifty_value
 
-# Function to fetch Nifty 50 previous day close price
+# Function to fetch Nifty 50 previous day end-of-day close price
 def fetch_nifty50_previous_close(date):
     api_key = FMP_API_KEY
     try:
-        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?from={date}&to={date}&apikey={api_key}")
+        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?apikey={api_key}&serietype=line")
         data = response.json() if response.status_code == 200 else {}
-        if "historical" in data and len(data["historical"]) > 0:
-            nifty50_close = data["historical"][0]["close"]
+        if "historical" in data:
+            historical_data = [entry for entry in data["historical"] if entry["date"] == date]
+            if historical_data:
+                nifty50_close = historical_data[0]["close"]
+            else:
+                nifty50_close = 0  # No data available for the given date
         else:
-            nifty50_close = 0  # No data available for the given date
+            nifty50_close = 0
         st.write(f"Nifty 50 API Response: {data}")  # Debug statement to log the entire response
     except Exception as e:
         nifty50_close = 0  # Handle exception and set a default value
@@ -58,17 +66,21 @@ def classify_market_opening(sgx_nifty_value, nifty50_close):
     else:
         return "Flat Neutral Opening"
 
-# Function to fetch Dow Jones Industrial Average (DJI) previous day close price and calculate percentage movement
+# Function to fetch Dow Jones Industrial Average (DJI) previous day end-of-day close price and calculate percentage movement
 def fetch_dji_previous_day(date):
     api_key = FMP_API_KEY
     try:
-        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5EDJI?from={date}&to={date}&apikey={api_key}")
+        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5EDJI?apikey={api_key}&serietype=line")
         data = response.json() if response.status_code == 200 else {}
-        if "historical" in data and len(data["historical"]) > 0:
-            dji_data = data["historical"][0]
-            previous_day_change_percentage = ((dji_data["close"] - dji_data["open"]) / dji_data["open"]) * 100
+        if "historical" in data:
+            historical_data = [entry for entry in data["historical"] if entry["date"] == date]
+            if historical_data:
+                dji_data = historical_data[0]
+                previous_day_change_percentage = ((dji_data["close"] - dji_data["open"]) / dji_data["open"]) * 100
+            else:
+                previous_day_change_percentage = 0  # No data available for the given date
         else:
-            previous_day_change_percentage = 0  # No data available for the given date
+            previous_day_change_percentage = 0
         st.write(f"DJI API Response: {data}")  # Debug statement to log the entire response
     except Exception as e:
         previous_day_change_percentage = 0  # Handle exception and set a default value
