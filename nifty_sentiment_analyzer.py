@@ -1,57 +1,43 @@
 import datetime
-import requests
-import pandas as pd
+from fmp_python.fmp import FMP
 import streamlit as st
 import streamlit.components.v1 as components
-import os
 
-# Load environment variables from .env file manually
-FMP_API_KEY = 'vptSViEFdGn6TJrvmWAkFx2MMaJBxvOJ'
+# Initialize the FMP client with your API key
+api_key = 'vptSViEFdGn6TJrvmWAkFx2MMaJBxvOJ'
+fmp = FMP(api_key=api_key, output_format='pandas')
 
-# Function to fetch SGX Nifty end-of-day value
-def fetch_sgx_nifty_value(date):
-    api_key = FMP_API_KEY
+# Function to fetch Nifty 50 end-of-day value
+def fetch_nifty50_value(date):
     try:
-        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?apikey={api_key}&serietype=line")
-        data = response.json() if response.status_code == 200 else {}
-        if "historical" in data:
-            historical_data = [entry for entry in data["historical"] if entry["date"] == date]
-            if historical_data:
-                sgx_nifty_value = historical_data[0]["close"]
-            else:
-                sgx_nifty_value = 0  # No data available for the given date
+        historical_data = fmp.get_historical_price('^NSEI', _from=date, _to=date)
+        if not historical_data.empty:
+            nifty50_close = historical_data.iloc[0]['close']
         else:
-            sgx_nifty_value = 0
-        st.write(f"SGX Nifty API Response: {data}")  # Debug statement to log the entire response
-    except Exception as e:
-        sgx_nifty_value = 0  # Handle exception and set a default value
-        st.write(f"Error fetching SGX Nifty value: {e}")  # Log the exception
-    st.write(f"SGX Nifty Value on {date}: {sgx_nifty_value}")  # Debug statement
-    return sgx_nifty_value
-
-# Function to fetch Nifty 50 previous day end-of-day close price
-def fetch_nifty50_previous_close(date):
-    api_key = FMP_API_KEY
-    try:
-        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5ENSEI?apikey={api_key}&serietype=line")
-        data = response.json() if response.status_code == 200 else {}
-        if "historical" in data:
-            historical_data = [entry for entry in data["historical"] if entry["date"] == date]
-            if historical_data:
-                nifty50_close = historical_data[0]["close"]
-            else:
-                nifty50_close = 0  # No data available for the given date
-        else:
-            nifty50_close = 0
-        st.write(f"Nifty 50 API Response: {data}")  # Debug statement to log the entire response
+            nifty50_close = 0  # No data available for the given date
+        st.write(f"Nifty 50 Data on {date}: {historical_data}")  # Debug statement
     except Exception as e:
         nifty50_close = 0  # Handle exception and set a default value
-        st.write(f"Error fetching Nifty 50 previous close: {e}")  # Log the exception
-    st.write(f"Nifty 50 Previous Close on {date}: {nifty50_close}")  # Debug statement
+        st.write(f"Error fetching Nifty 50 value: {e}")  # Log the exception
     return nifty50_close
 
-# Function to classify the market opening sentiment based on SGX Nifty and Nifty 50 previous close
-def classify_market_opening(sgx_nifty_value, nifty50_close):
+# Function to fetch Dow Jones Industrial Average (DJI) previous day end-of-day close price and calculate percentage movement
+def fetch_dji_previous_day(date):
+    try:
+        historical_data = fmp.get_historical_price('^DJI', _from=date, _to=date)
+        if not historical_data.empty:
+            dji_data = historical_data.iloc[0]
+            previous_day_change_percentage = ((dji_data['close'] - dji_data['open']) / dji_data['open']) * 100
+        else:
+            previous_day_change_percentage = 0  # No data available for the given date
+        st.write(f"DJI Data on {date}: {historical_data}")  # Debug statement
+    except Exception as e:
+        previous_day_change_percentage = 0  # Handle exception and set a default value
+        st.write(f"Error fetching DJI data: {e}")  # Log the exception
+    return previous_day_change_percentage
+
+# Function to classify the market opening sentiment based on Nifty 50 previous close and SGX Nifty value
+def classify_market_opening(nifty50_close, sgx_nifty_value):
     difference = sgx_nifty_value - nifty50_close
     if -40 <= difference <= 40:
         return "Flat Opening"
@@ -65,28 +51,6 @@ def classify_market_opening(sgx_nifty_value, nifty50_close):
         return "Gap Down Opening"
     else:
         return "Flat Neutral Opening"
-
-# Function to fetch Dow Jones Industrial Average (DJI) previous day end-of-day close price and calculate percentage movement
-def fetch_dji_previous_day(date):
-    api_key = FMP_API_KEY
-    try:
-        response = requests.get(f"https://financialmodelingprep.com/api/v3/historical-price-full/%5EDJI?apikey={api_key}&serietype=line")
-        data = response.json() if response.status_code == 200 else {}
-        if "historical" in data:
-            historical_data = [entry for entry in data["historical"] if entry["date"] == date]
-            if historical_data:
-                dji_data = historical_data[0]
-                previous_day_change_percentage = ((dji_data["close"] - dji_data["open"]) / dji_data["open"]) * 100
-            else:
-                previous_day_change_percentage = 0  # No data available for the given date
-        else:
-            previous_day_change_percentage = 0
-        st.write(f"DJI API Response: {data}")  # Debug statement to log the entire response
-    except Exception as e:
-        previous_day_change_percentage = 0  # Handle exception and set a default value
-        st.write(f"Error fetching DJI data: {e}")  # Log the exception
-    st.write(f"DJI Change Percentage on {date}: {previous_day_change_percentage}%")  # Debug statement
-    return previous_day_change_percentage
 
 # Function to get DJI sentiment
 def get_dji_sentiment(change_percentage):
@@ -113,9 +77,9 @@ def determine_market_movement(open_point, close_point):
 
 # Function to get the market sentiment for a specific date
 def get_market_sentiment(date):
-    sgx_nifty_value = fetch_sgx_nifty_value(date)
-    nifty50_close = fetch_nifty50_previous_close(date)
-    market_opening_sentiment = classify_market_opening(sgx_nifty_value, nifty50_close)
+    nifty50_close = fetch_nifty50_value(date)
+    sgx_nifty_value = fetch_nifty50_value(date)  # Assuming SGX Nifty data is similar to Nifty 50 for this example
+    market_opening_sentiment = classify_market_opening(nifty50_close, sgx_nifty_value)
     dji_change_percentage = fetch_dji_previous_day(date)
     dji_sentiment = get_dji_sentiment(dji_change_percentage)
     close_point = calculate_close_point(nifty50_close, dji_change_percentage)
