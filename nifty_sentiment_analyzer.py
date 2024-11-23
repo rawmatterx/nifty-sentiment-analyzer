@@ -20,6 +20,7 @@ def fetch_sgx_nifty_value(date):
             sgx_nifty_value = 0  # Default value in case of an error
     except Exception as e:
         sgx_nifty_value = 0  # Handle exception and set a default value
+    st.write(f"SGX Nifty Value on {date}: {sgx_nifty_value}")  # Debug statement
     return sgx_nifty_value
 
 # Function to fetch Nifty 50 previous day close price
@@ -33,6 +34,7 @@ def fetch_nifty50_previous_close(date):
             nifty50_close = 0  # Default value in case of an error
     except Exception as e:
         nifty50_close = 0  # Handle exception and set a default value
+    st.write(f"Nifty 50 Previous Close on {date}: {nifty50_close}")  # Debug statement
     return nifty50_close
 
 # Function to classify the market opening sentiment based on SGX Nifty and Nifty 50 previous close
@@ -94,8 +96,10 @@ def get_market_sentiment(date):
     nifty50_close = fetch_nifty50_previous_close(date)
     market_opening_sentiment = classify_market_opening(sgx_nifty_value, nifty50_close)
     dji_change_percentage = fetch_dji_previous_day(date)
+    st.write(f"DJI Change Percentage on {date}: {dji_change_percentage}%")  # Debug statement
     dji_sentiment = get_dji_sentiment(dji_change_percentage)
     close_point = calculate_close_point(nifty50_close, dji_change_percentage)
+    st.write(f"Calculated Close Point on {date}: {close_point}")  # Debug statement
     market_movement = determine_market_movement(sgx_nifty_value, close_point)
     return market_opening_sentiment, market_movement, dji_sentiment
 
